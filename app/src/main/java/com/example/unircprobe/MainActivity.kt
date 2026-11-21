@@ -6,6 +6,7 @@ import android.content.Intent
 import android.hardware.input.InputManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -29,6 +30,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
         manager = getSystemService(Context.INPUT_SERVICE) as InputManager
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16); isFocusableInTouchMode = true }
         val header = TextView(this).apply { text = "UniRC Input Probe — CH6/CH7 discovery\nKeep this app in foreground. Move LD/RD and press buttons."; textSize = 17f }
@@ -45,8 +47,21 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         manager.registerInputDeviceListener(this, null)
         listDevices()
         layout.requestFocus()
+        } catch (e: Throwable) {
+            Log.e("UniRCProbe", "Startup failure", e)
+            val errorView = TextView(this).apply {
+                text = "UniRC Input Probe startup error:\n\n" + Log.getStackTraceString(e)
+                textSize = 13f
+                setPadding(24, 24, 24, 24)
+                setTextIsSelectable(true)
+            }
+            setContentView(ScrollView(this).apply { addView(errorView) })
+        }
     }
-    override fun onDestroy() { manager.unregisterInputDeviceListener(this); super.onDestroy() }
+    override fun onDestroy() {
+        if (::manager.isInitialized) manager.unregisterInputDeviceListener(this)
+        super.onDestroy()
+    }
     private fun log(message: String) {
         val stamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
         lines.add("$stamp $message")
