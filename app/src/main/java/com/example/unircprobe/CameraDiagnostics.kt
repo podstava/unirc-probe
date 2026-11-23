@@ -14,12 +14,22 @@ import java.util.concurrent.Executors
 
 private enum class Query(val label: String) {
     TAS("Поточне значення шторки"), VER("Версія прошивки"),
-    HWV("Апаратна версія"), MOD("Код моделі"), REC("Стан запису");
+    HWV("Апаратна версія"), MOD("Код моделі"), REC("Стан запису"),
+    IQE("Денна камера · параметри зображення");
 
     override fun toString() = label
 
     fun explain(data: String): String = when (this) {
-        TAS -> data.toIntOrNull(16)?.let { "Значення шторки: $it (одиниці не підтверджено)" }
+        IQE -> {
+            if (!Regex("[0-9a-fA-F]{12}").matches(data)) {
+                "Невідомий формат профілю денної камери: $data"
+            } else {
+                val labels = listOf("ID", "Стиль", "Тон", "Яскравість", "Насиченість", "Контраст", "Різкість")
+                val values = listOf(data.take(1), data.substring(1, 2)) + data.drop(2).chunked(2)
+                labels.zip(values).joinToString("\n") { (label, value) -> "$label: ${value.toInt(16)}" }
+            }
+        }
+        TAS -> data.toIntOrNull(16)?.let { "Значення шторки: $it с (за шкалою SDK)" }
         REC -> when (data) {
             "00" -> "Запис зупинено"
             "01" -> "Запис триває"
@@ -57,12 +67,19 @@ private fun readCamera(host: String, query: Query, sent: (String) -> Unit): Stri
             last = raw.take(160)
             for (match in header.findAll(raw)) {
                 val start = match.range.first
-                val end = start + 10 + match.groupValues[1].toInt(16)
-                if (end + 2 > raw.length) continue
-                val value = raw.substring(start + 10, end)
-                if (value.isEmpty()) continue
-                if (!checksum(raw.substring(start, end)).equals(raw.substring(end, end + 2), true)) continue
-                return "${query.explain(value)}\nRX  ${raw.substring(start, end + 2)}"
+                val declared = match.groupValues[1].toInt(16)
+                // The bridge's VER fixture declares three bytes and carries six hex digits.
+                val lengths = if (query == Query.VER || query == Query.IQE)
+                    listOf(declared, declared * 2).distinct() else listOf(declared)
+                for (length in lengths) {
+                    val end = start + 10 + length
+                    if (end + 2 > raw.length) continue
+                    val value = raw.substring(start + 10, end)
+                    if (value.isEmpty()) continue
+                    if (!checksum(raw.substring(start, end)).equals(raw.substring(end, end + 2), true)) continue
+                    if (end + 2 < raw.length && raw[end + 2] !in "#\r\n\u0000") continue
+                    return "${query.explain(value)}\nRX  ${raw.substring(start, end + 2)}"
+                }
             }
         }
         return if (last.isEmpty()) "За 2,5 с відповідь не надійшла."
