@@ -40,6 +40,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         buttons.addView(Button(this).apply { text = "Export"; setOnClickListener { exportLog() } })
         buttons.addView(Button(this).apply { text = "Clear"; setOnClickListener { lines.clear(); output.text = ""; lastAxis.clear() } })
         layout.addView(buttons)
+        layout.addView(Button(this).apply { text = "Діагностика камери"; setOnClickListener { startActivity(Intent(this@MainActivity, CameraDiagnostics::class.java)) } })
         output = TextView(this).apply { textSize = 12f; typeface = android.graphics.Typeface.MONOSPACE; setTextIsSelectable(true) }
         val scroll = ScrollView(this).apply { addView(output) }
         layout.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
